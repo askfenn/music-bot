@@ -74,7 +74,6 @@ class YTDLSource(discord.PCMVolumeTransformer):
         filename = data['url'] if stream else ytdl.prepare_filename(data)
         return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
 
-
 async def play_next(ctx):
     guild_id = ctx.guild.id
     if song_queues[guild_id]:
@@ -92,7 +91,6 @@ async def play_next(ctx):
         await ctx.send(f'Now playing: {player.title}')
     else:
         current_song[guild_id] = None
-
 
 @bot.event
 async def on_ready():
