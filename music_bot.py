@@ -10,9 +10,13 @@ import base64
 
 load_dotenv()
 
-cookie_data = base64.b64decode(os.getenv("YOUTUBE_COOKIES_B64")).decode("utf-8")
-with open("cookies.txt", "w") as f:
-    f.write(cookie_data)
+cookie_path = None
+cookie_b64 = os.getenv("YOUTUBE_COOKIES_B64")
+
+if cookie_b64:
+    cookie_path = "cookies.txt"
+    with open(cookie_path, "wb") as f:
+        f.write(base64.b64decode(cookie_b64))
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -28,9 +32,11 @@ ytdl_format_options = {
     'ignoreerrors': False,
     'logtostderr': False,
     'noplaylist': True,
-    'default_search': 'ytsearch',
-    'cookiefile': 'cookies.txt'
+    'default_search': 'ytsearch'
 }
+
+if cookie_path:
+    ytdl_format_options['cookiefile'] = cookie_path
 
 ffmpeg_options = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
