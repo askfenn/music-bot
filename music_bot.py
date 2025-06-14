@@ -6,8 +6,13 @@ from dotenv import load_dotenv
 import os
 from collections import deque
 from datetime import datetime, timedelta, timezone
+import base64
 
 load_dotenv()
+
+cookie_data = base64.b64decode(os.getenv("YOUTUBE_COOKIES_B64")).decode("utf-8")
+with open("cookies.txt", "w") as f:
+    f.write(cookie_data)
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -23,7 +28,8 @@ ytdl_format_options = {
     'ignoreerrors': False,
     'logtostderr': False,
     'noplaylist': True,
-    'default_search': 'ytsearch'
+    'default_search': 'ytsearch',
+    'cookiefile': 'cookies.txt'
 }
 
 ffmpeg_options = {
