@@ -5,7 +5,7 @@ import yt_dlp
 from dotenv import load_dotenv
 import os
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 load_dotenv()
 
@@ -57,7 +57,7 @@ async def play_next(ctx):
         next_query = song_queues[guild_id].popleft()
         player = await YTDLSource.from_query(next_query, stream=True)
         current_song[guild_id] = player.title
-        last_activity[guild_id] = datetime.now(datetime.timezone.utc)
+        last_activity[guild_id] = datetime.now(timezone.utc)
         ctx.voice_client.play(player, after=lambda e: bot.loop.create_task(play_next(ctx)))
         await ctx.send(f'Now playing: {player.title}')
     else:
@@ -74,7 +74,7 @@ async def idle_check():
         vc = guild.voice_client
         if vc and not vc.is_playing() and not vc.is_paused():
             if guild.id in last_activity:
-                if datetime.now(datetime.timezone.utc) - last_activity[guild.id] > timedelta(minutes=5):
+                if datetime.now(timezone.utc) - last_activity[guild.id] > timedelta(minutes=5):
                     await vc.disconnect()
                     song_queues[guild.id].clear()
                     current_song[guild.id] = None
@@ -87,7 +87,7 @@ async def join(ctx):
         guild_id = ctx.guild.id
         song_queues.setdefault(guild_id, deque())
         current_song.setdefault(guild_id, None)
-        last_activity[guild_id] = datetime.now(datetime.timezone.utc)
+        last_activity[guild_id] = datetime.now(timezone.utc)
     else:
         await ctx.send("You're not in a voice channel!")
 
