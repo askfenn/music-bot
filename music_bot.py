@@ -1,9 +1,11 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import asyncio
 import yt_dlp
 from dotenv import load_dotenv
 import os
+from collections import deque
+from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -21,6 +23,7 @@ ytdl_format_options = {
     'ignoreerrors': False,
     'logtostderr': False,
     'noplaylist': True,
+    'default_search': 'ytsearch'
 }
 
 ffmpeg_options = {
@@ -29,6 +32,10 @@ ffmpeg_options = {
 
 ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
 
+song_queues = {}
+current_song = {}
+last_activity = {}
+
 class YTDLSource(discord.PCMVolumeTransformer):
     def __init__(self, source, *, data, volume=0.5):
         super().__init__(source, volume)
@@ -36,40 +43,72 @@ class YTDLSource(discord.PCMVolumeTransformer):
         self.title = data.get('title')
 
     @classmethod
-    async def from_url(cls, url, *, loop=None, stream=False):
+    async def from_query(cls, query, *, loop=None, stream=True):
         loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
+        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(query, download=not stream))
         if 'entries' in data:
             data = data['entries'][0]
         filename = data['url'] if stream else ytdl.prepare_filename(data)
         return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
 
+async def play_next(ctx):
+    guild_id = ctx.guild.id
+    if song_queues[guild_id]:
+        next_query = song_queues[guild_id].popleft()
+        player = await YTDLSource.from_query(next_query, stream=True)
+        current_song[guild_id] = player.title
+        last_activity[guild_id] = datetime.now(datetime.timezone.utc)
+        ctx.voice_client.play(player, after=lambda e: bot.loop.create_task(play_next(ctx)))
+        await ctx.send(f'Now playing: {player.title}')
+    else:
+        current_song[guild_id] = None
+
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.name}')
+    idle_check.start()
 
-@bot.event
-async def on_message(message):
-    await bot.process_commands(message)
+@tasks.loop(seconds=60)
+async def idle_check():
+    for guild in bot.guilds:
+        vc = guild.voice_client
+        if vc and not vc.is_playing() and not vc.is_paused():
+            if guild.id in last_activity:
+                if datetime.now(datetime.timezone.utc) - last_activity[guild.id] > timedelta(minutes=5):
+                    await vc.disconnect()
+                    song_queues[guild.id].clear()
+                    current_song[guild.id] = None
+                    print(f'Disconnected from {guild.name} due to inactivity.')
 
 @bot.command(name='join')
 async def join(ctx):
     if ctx.author.voice:
         await ctx.author.voice.channel.connect()
+        guild_id = ctx.guild.id
+        song_queues.setdefault(guild_id, deque())
+        current_song.setdefault(guild_id, None)
+        last_activity[guild_id] = datetime.now(datetime.timezone.utc)
+    else:
+        await ctx.send("You're not in a voice channel!")
 
 @bot.command(name='play')
-async def play(ctx, url):
+async def play(ctx, *, query):
     if not ctx.voice_client:
         await ctx.invoke(join)
-    async with ctx.typing():
-        player = await YTDLSource.from_url(url, stream=True)
-        ctx.voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
-    await ctx.send(f'Now playing: {player.title}')
+    guild_id = ctx.guild.id
+    if ctx.voice_client.is_playing() or ctx.voice_client.is_paused():
+        song_queues[guild_id].append(query)
+        await ctx.send(f"Added to queue: {query}")
+    else:
+        song_queues[guild_id].appendleft(query)
+        await play_next(ctx)
 
 @bot.command(name='leave')
 async def leave(ctx):
     if ctx.voice_client:
         await ctx.voice_client.disconnect()
+        song_queues[ctx.guild.id].clear()
+        current_song[ctx.guild.id] = None
 
 @bot.command(name='stop')
 async def stop(ctx):
