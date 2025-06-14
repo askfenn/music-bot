@@ -58,23 +58,41 @@ class YTDLSource(discord.PCMVolumeTransformer):
     @classmethod
     async def from_query(cls, query, *, loop=None, stream=True):
         loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(query, download=not stream))
+        try:
+            data = await loop.run_in_executor(None, lambda: ytdl.extract_info(query, download=not stream))
+        except Exception as e:
+            print(f"yt_dlp error: {e}")
+            return None
+
+        if not data:
+            print("yt_dlp returned None for query:", query)
+            return None
+
         if 'entries' in data:
             data = data['entries'][0]
+
         filename = data['url'] if stream else ytdl.prepare_filename(data)
         return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
+
 
 async def play_next(ctx):
     guild_id = ctx.guild.id
     if song_queues[guild_id]:
         next_query = song_queues[guild_id].popleft()
         player = await YTDLSource.from_query(next_query, stream=True)
+
+        if not player:
+            await ctx.send(f"Failed to load: {next_query}")
+            await play_next(ctx)
+            return
+
         current_song[guild_id] = player.title
-        last_activity[guild_id] = datetime.now(timezone.utc)
+        last_activity[guild_id] = datetime.now(datetime.timezone.utc)
         ctx.voice_client.play(player, after=lambda e: bot.loop.create_task(play_next(ctx)))
         await ctx.send(f'Now playing: {player.title}')
     else:
         current_song[guild_id] = None
+
 
 @bot.event
 async def on_ready():
