@@ -75,6 +75,27 @@ async def leave(ctx):
 async def stop(ctx):
     if ctx.voice_client:
         ctx.voice_client.stop()
+        song_queues[ctx.guild.id].clear()
+
+@bot.command(name='pause')
+async def pause(ctx):
+    if ctx.voice_client and ctx.voice_client.is_playing():
+        ctx.voice_client.pause()
+        await ctx.send("Paused.")
+
+@bot.command(name='resume')
+async def resume(ctx):
+    if ctx.voice_client and ctx.voice_client.is_paused():
+        ctx.voice_client.resume()
+        await ctx.send("Resumed.")
+
+@bot.command(name='now')
+async def now(ctx):
+    song = current_song.get(ctx.guild.id)
+    if song:
+        await ctx.send(f"Currently playing: {song}")
+    else:
+        await ctx.send("No song is currently playing.")
 
 token = os.getenv("BOT_TOKEN")
 bot.run(token)
