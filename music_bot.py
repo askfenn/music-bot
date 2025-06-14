@@ -137,5 +137,15 @@ async def now(ctx):
     else:
         await ctx.send("No song is currently playing.")
 
+@bot.command(name='skip')
+async def skip(ctx):
+    voice = ctx.voice_client
+    if not voice or not voice.is_playing():
+        await ctx.send("Nothing is currently playing.")
+        return
+
+    await ctx.send("Skipping current song...")
+    voice.stop()
+
 token = os.getenv("BOT_TOKEN")
 bot.run(token)
