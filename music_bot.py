@@ -86,7 +86,7 @@ async def play_next(ctx):
             return
 
         current_song[guild_id] = player.title
-        last_activity[guild_id] = datetime.now(datetime.timezone.utc)
+        last_activity[guild_id] = datetime.now(timezone.utc)
         ctx.voice_client.play(player, after=lambda e: bot.loop.create_task(play_next(ctx)))
         await ctx.send(f'Now playing: {player.title}')
     else:
