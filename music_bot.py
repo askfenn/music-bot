@@ -112,7 +112,13 @@ async def idle_check():
 @bot.command(name='join')
 async def join(ctx):
     if ctx.author.voice:
-        await ctx.author.voice.channel.connect()
+        channel = ctx.author.voice.channel
+
+        if ctx.voice_client:
+            await ctx.voice_client.move_to(channel)
+        else:
+            await channel.connect()
+
         guild_id = ctx.guild.id
         song_queues.setdefault(guild_id, deque())
         current_song.setdefault(guild_id, None)
@@ -124,6 +130,10 @@ async def join(ctx):
 async def play(ctx, *, query):
     if not ctx.voice_client:
         await ctx.invoke(join)
+
+    if not ctx.voice_client:
+        return await ctx.send("Failed to join voice channel.")
+
     guild_id = ctx.guild.id
     if ctx.voice_client.is_playing() or ctx.voice_client.is_paused():
         song_queues[guild_id].append(query)
